@@ -58,7 +58,7 @@ def neural_network(x):
                                W=weight_variable([1, 1, 512, 1000], name='conv10', init='gauss'))
     net['relu10'] = relu_layer('relu10', net['conv10'], b=bias_variable([1000]))
 
-    net['pool10'] = pool_layer('pool10', net['conv10'], pooling_type='avg')
+    net['pool10'] = pool_layer('pool10', net['relu10'], pooling_type='avg')
 
     return net
 
