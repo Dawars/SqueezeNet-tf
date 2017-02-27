@@ -26,7 +26,14 @@ class SqueezeNet(object):
 
     def build_model(self):
         net = {}
-        net['input'] = self.imgs
+
+        # Caffe order is BGR, this model is RGB.
+        # The mean values are from caffe protofile from DeepScale/SqueezeNet github repo.
+        self.mean = tf.constant([123.0, 117.0, 104.0],
+                                dtype=tf.float32, shape=[1, 1, 1, 3], name='img_mean')
+        images = self.imgs-self.mean
+
+        net['input'] = images
 
         # conv1_1
         net['conv1'] = self.conv_layer('conv1', net['input'],
