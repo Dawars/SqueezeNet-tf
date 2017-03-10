@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import cv2
 
+
 class SqueezeNet(object):
     def __init__(self, session, alpha, optimizer=tf.train.GradientDescentOptimizer, squeeze_ratio=1):
         if session:
@@ -58,7 +59,7 @@ class SqueezeNet(object):
         # 50% dropout
         net['dropout9'] = tf.nn.dropout(net['fire9'], self.dropout)
         net['conv10']   = self.conv_layer('conv10', net['dropout9'],
-                               W=self.weight_variable([1, 1, 512, 1000], name='conv10'))
+                               W=self.weight_variable([1, 1, 512, 1000], name='conv10', init='normal'))
         net['relu10'] = self.relu_layer('relu10', net['conv10'], b=self.bias_variable([1000], 'relu10_b'))
         net['pool10'] = self.pool_layer('pool10', net['relu10'], pooling_type='avg')
 
@@ -89,13 +90,15 @@ class SqueezeNet(object):
         elif init == 'xavier':
             initial = tf.get_variable('W' + name, shape, initializer=tf.contrib.layers.xavier_initializer())
         else:
-            initial = tf.Variable(tf.truncated_normal(shape, stddev=0.01))
+            initial = tf.Variable(tf.random_normal(shape, stddev=0.01), name='W'+name)
 
         self.weights[name] = initial
         return self.weights[name]
 
-    def relu_layer(self, layer_name, layer_input, b):
-        relu = tf.nn.relu(layer_input + b)
+    def relu_layer(self, layer_name, layer_input, b=None):
+        if b:
+            layer_input += b
+        relu = tf.nn.relu(layer_input)
         return relu
 
     def pool_layer(self, layer_name, layer_input, pooling_type='max'):
@@ -121,7 +124,7 @@ class SqueezeNet(object):
 
         # expand
         e1_weight = self.weight_variable([1, 1, s1x1, e1x1], layer_name + '_e1')
-        e3_weight = self.weight_variable([1, 1, s1x1, e3x3], layer_name + '_e3')
+        e3_weight = self.weight_variable([3, 3, s1x1, e3x3], layer_name + '_e3')
 
         fire['s1'] = self.conv_layer(layer_name + '_s1', layer_input, W=s1_weight)
         fire['relu1'] = self.relu_layer(layer_name + '_relu1', fire['s1'],
@@ -129,15 +132,15 @@ class SqueezeNet(object):
 
         fire['e1'] = self.conv_layer(layer_name + '_e1', fire['relu1'], W=e1_weight)
         fire['e3'] = self.conv_layer(layer_name + '_e3', fire['relu1'], W=e3_weight)
-        fire['concat'] = tf.concat([fire['e1'], fire['e3']], 3)
+        fire['concat'] = tf.concat([tf.add(fire['e1'], self.bias_variable([e1x1],
+                                                           name=layer_name + '_fire_bias_e1' )),
+                                    tf.add(fire['e3'], self.bias_variable([e3x3],
+                                                           name=layer_name + '_fire_bias_e3' ))], 3)
 
-        # simple residual connection
         if residual:
-            fire['relu2'] = self.relu_layer(layer_name + 'relu2_res', tf.add(fire['concat'],layer_input),
-                                        b=self.bias_variable([e1x1 + e3x3], layer_name + '_fire_bias_ex'))
+            fire['relu2'] = self.relu_layer(layer_name + 'relu2_res', tf.add(fire['concat'],layer_input))
         else:
-            fire['relu2'] = self.relu_layer(layer_name + '_relu2', fire['concat'],
-                                        b=self.bias_variable([e1x1 + e3x3], layer_name + '_fire_bias_ex'))
+            fire['relu2'] = self.relu_layer(layer_name + '_relu2', fire['concat'])
 
         return fire['relu2']
 
@@ -162,14 +165,13 @@ class SqueezeNet(object):
 
 if __name__ == '__main__':
     sess = tf.Session()
-    imgs = tf.placeholder(tf.float32, [None, 224, 224, 3])
     alpha= tf.placeholder(tf.float32)
     net  = SqueezeNet(sess, alpha)
 
-    #img1 = cv2.imread('./images/architecture.png')#, mode='RGB')
-    #img1 = cv2.cvtColor(img1,cv2.COLOR_BGR2RGB)
-    #img1 = cv2.resize(img1, (224, 224))
-    #prob = sess.run(net.probs, feed_dict={net.net['input']: [img1,img1,img1], net.dropout:1.0})
-
+    img1 = cv2.imread('./images/architecture.png')#, mode='RGB')
+    img1 = cv2.cvtColor(img1,cv2.COLOR_BGR2RGB)
+    img1 = cv2.resize(img1, (224, 224))
+    prob = sess.run(net.probs, feed_dict={net.net['input']: [img1], net.dropout:1.0})
+    print(prob)
     net.save_model('test.ckpt')
     net.load_model('./test.ckpt')
