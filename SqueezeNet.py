@@ -173,5 +173,5 @@ if __name__ == '__main__':
     img1 = cv2.resize(img1, (224, 224))
     prob = sess.run(net.probs, feed_dict={net.net['input']: [img1], net.dropout:1.0})
     print(prob)
-    net.save_model('test.ckpt')
+    net.save_model('./test.ckpt')
     net.load_model('./test.ckpt')
